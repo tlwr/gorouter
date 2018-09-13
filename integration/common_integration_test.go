@@ -123,6 +123,21 @@ func (s *testState) register(backend *httptest.Server, routeURI string) {
 	s.registerAndWait(rm)
 }
 
+func (s *testState) registerTLS(backend *httptest.Server, routeURI string) {
+	_, backendPort := hostnameAndPort(backend.Listener.Addr().String())
+	rm := mbus.RegistryMessage{
+		Host:                    "127.0.0.1",
+		TLSPort:                 uint16(backendPort),
+		Port:                    uint16(backendPort),
+		Uris:                    []route.Uri{route.Uri(routeURI)},
+		StaleThresholdInSeconds: 1,
+		RouteServiceURL:         "",
+		ServerCertDomainSAN:     fmt.Sprintf("%x", rand.Int31()),
+		PrivateInstanceID:       fmt.Sprintf("%x", rand.Int31()),
+	}
+	s.registerAndWait(rm)
+}
+
 func (s *testState) registerWithExternalRouteService(appBackend, routeServiceServer *httptest.Server, routeServiceHostname string, routeURI string) {
 	_, serverPort := hostnameAndPort(routeServiceServer.Listener.Addr().String())
 	_, appBackendPort := hostnameAndPort(appBackend.Listener.Addr().String())

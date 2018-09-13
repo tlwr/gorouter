@@ -26,8 +26,9 @@ route-registrar runs.
 
 ## Decision
 
-We are going to start pruning any TLS route that has had a dial
-failure immediately.
+We are going to prune a TLS route on a `Dial` error _if_
+the TTL of the route has passed. This gives the
+route time to recover.
 
 We will also be logging the cases where we are pruning versus
 marking an endpoint as failed and removing it from the route
@@ -35,15 +36,13 @@ pool for a 'cooldown'.
 
 ## Consequences
 
-If developers app is not coming up they may start to see a new
-pattern of 502 followed by a series of 404s (until the route
-is re-emitted).
+If developers app is not coming up they will see the same error
+pattern of 502s they saw before, the current behavior does not
+change.
 
 Logging will be introduced into the route pool for the first time
 giving operators a view into whether a prune or fail has actually
 occurred and what error caused it.
 
-An app under load today will be marked as failed and removed from
-the pool for a certain amount of time. The request is retried with
-a new backend until max retries are reached. This behavior should
-appear the same to the end user after the change is implemented.
+Now TLS routes will actually get removed from the pool if there
+is an error and their TTL has passed.

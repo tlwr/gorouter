@@ -366,8 +366,20 @@ func (p *Pool) EndpointFailed(endpoint *Endpoint, err error) {
 		return
 	}
 
-	if e.endpoint.useTls && fails.PrunableClassifiers.Classify(err) {
-		p.removeEndpoint(e)
+	if e.endpoint.useTls {
+		switch {
+		case fails.Dial.Classify(err) == true:
+			staleTime := time.Now().Add(-e.endpoint.StaleThreshold)
+
+			if e.updated.Before(staleTime) {
+				p.removeEndpoint(e)
+			}
+		case fails.HostnameMismatch.Classify(err) == true:
+			p.removeEndpoint(e)
+		case fails.AttemptedTLSWithNonTLSBackend.Classify(err) == true:
+			p.removeEndpoint(e)
+		}
+
 		return
 	}
 
