@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	B3Header             = "b3"
 	B3TraceIdHeader      = "X-B3-TraceId"
 	B3SpanIdHeader       = "X-B3-SpanId"
 	B3ParentSpanIdHeader = "X-B3-ParentSpanId"
@@ -42,26 +43,42 @@ func (z *Zipkin) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.Ha
 		return
 	}
 
-	existingTraceId := r.Header.Get(B3TraceIdHeader)
-	existingSpanId := r.Header.Get(B3SpanIdHeader)
+	existingContext := r.Header.Get(B3Header)
+	if existingContext != "" {
+		z.logger.Debug("b3-header-exists",
+			zap.String("B3Header", existingContext),
+		)
 
-	if existingTraceId == "" || existingSpanId == "" {
-		randBytes, err := secure.RandomBytes(8)
+		return
+	}
+
+	existingTraceID := r.Header.Get(B3TraceIdHeader)
+	existingSpanID := r.Header.Get(B3SpanIdHeader)
+	if existingTraceID == "" || existingSpanID == "" {
+		traceID, err := generateSpanID()
 		if err != nil {
 			z.logger.Info("failed-to-create-b3-trace-id", zap.Error(err))
-			return
 		}
 
-		id := hex.EncodeToString(randBytes)
-		r.Header.Set(B3TraceIdHeader, id)
-		r.Header.Set(B3SpanIdHeader, r.Header.Get(B3TraceIdHeader))
+		r.Header.Set(B3TraceIdHeader, traceID)
+		r.Header.Set(B3SpanIdHeader, traceID)
+		// if traceID and spanID is generated we also send the single B3 header
+		r.Header.Set(B3Header, traceID+"-"+traceID)
 	} else {
 		z.logger.Debug("b3-trace-id-span-id-header-exists",
-			zap.String("B3TraceIdHeader", existingTraceId),
-			zap.String("B3SpanIdHeader", existingSpanId),
+			zap.String("B3TraceIdHeader", existingTraceID),
+			zap.String("B3SpanIdHeader", existingSpanID),
 		)
 	}
-	return
+}
+
+func generateSpanID() (string, error) {
+	randBytes, err := secure.RandomBytes(8)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(randBytes), nil
 }
 
 // HeadersToLog returns headers that should be logged in the access logs and
@@ -82,6 +99,11 @@ func (z *Zipkin) HeadersToLog() []string {
 	if !contains(headersToLog, B3ParentSpanIdHeader) {
 		headersToLog = append(headersToLog, B3ParentSpanIdHeader)
 	}
+
+	if !contains(headersToLog, B3Header) {
+		headersToLog = append(headersToLog, B3Header)
+	}
+
 	return headersToLog
 }
 
