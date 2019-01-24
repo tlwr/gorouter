@@ -219,7 +219,7 @@ var defaultConfig = Config{
 	DisableHTTP:   false,
 	MinTLSVersion: tls.VersionTLS12,
 
-	EndpointTimeout:     60 * time.Second,
+	EndpointTimeout:     120 * time.Second,
 	EndpointDialTimeout: 5 * time.Second,
 	RouteServiceTimeout: 60 * time.Second,
 
