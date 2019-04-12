@@ -217,8 +217,7 @@ func (p *proxy) ServeHTTP(responseWriter http.ResponseWriter, request *http.Requ
 	}
 
 	stickyEndpointId := getStickySession(request)
-	iter := &wrappedIterator{
-		//TODO: rename this variable. endpointIterator?
+	endpointIterator := &wrappedIterator{
 		nested: reqInfo.RoutePool.Endpoints(p.defaultLoadBalance, stickyEndpointId),
 
 		afterNext: func(endpoint *route.Endpoint) {
@@ -230,12 +229,12 @@ func (p *proxy) ServeHTTP(responseWriter http.ResponseWriter, request *http.Requ
 	}
 
 	if handlers.IsTcpUpgrade(request) {
-		handler.HandleTcpRequest(iter)
+		handler.HandleTcpRequest(endpointIterator)
 		return
 	}
 
 	if handlers.IsWebSocketUpgrade(request) {
-		handler.HandleWebSocketRequest(iter)
+		handler.HandleWebSocketRequest(endpointIterator)
 		return
 	}
 

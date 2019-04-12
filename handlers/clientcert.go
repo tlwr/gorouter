@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"code.cloudfoundry.org/gorouter/config"
-
 	"code.cloudfoundry.org/gorouter/logger"
 	"github.com/uber-go/zap"
 	"github.com/urfave/negroni"
@@ -36,13 +35,15 @@ func (c *clientCert) ServeHTTP(rw http.ResponseWriter, r *http.Request, next htt
 		switch c.forwardingMode {
 		case config.FORWARD:
 			// TODO: Consider putting these in readable booleans like "isTLS" and "hasPeerCertificates"
-			if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+			noTLS := (r.TLS == nil)
+			noPeerCertificates := (len(r.TLS.PeerCertificates) == 0)
+			if noTLS || noPeerCertificates {
 				r.Header.Del(xfcc)
 			}
 		case config.SANITIZE_SET:
 			r.Header.Del(xfcc)
 			if r.TLS != nil {
-				sanitizeHeader(r)
+				replaceXFCCHeader(r)
 			}
 		}
 	}
@@ -66,7 +67,7 @@ func (c *clientCert) ServeHTTP(rw http.ResponseWriter, r *http.Request, next htt
 
 //TODO: rename this function
 // maybe setXFCCHeaderWithTlsCertificate ?
-func sanitizeHeader(r *http.Request) {
+func replaceXFCCHeader(r *http.Request) {
 	// we only care about the first cert at this moment
 	if len(r.TLS.PeerCertificates) > 0 {
 		cert := r.TLS.PeerCertificates[0]
