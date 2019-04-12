@@ -47,7 +47,7 @@ type FakeRoundTripperFactory struct {
 	Calls       int
 }
 
-func (f *FakeRoundTripperFactory) New(expectedServerName string) round_tripper.ProxyRoundTripper {
+func (f *FakeRoundTripperFactory) New(expectedServerName string, isRouteService bool) round_tripper.ProxyRoundTripper {
 	f.Calls++
 	return f.ReturnValue
 }

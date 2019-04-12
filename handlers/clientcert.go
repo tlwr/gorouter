@@ -15,13 +15,13 @@ import (
 const xfcc = "X-Forwarded-Client-Cert"
 
 type clientCert struct {
-	skipSanitization  func(req *http.Request) (bool, error)
+	skipSanitization  func(req *http.Request) bool
 	forceDeleteHeader func(req *http.Request) (bool, error)
 	forwardingMode    string
 	logger            logger.Logger
 }
 
-func NewClientCert(skipSanitization, forceDeleteHeader func(req *http.Request) (bool, error), forwardingMode string, logger logger.Logger) negroni.Handler {
+func NewClientCert(skipSanitization func(req *http.Request) bool, forceDeleteHeader func(req *http.Request) (bool, error), forwardingMode string, logger logger.Logger) negroni.Handler {
 	return &clientCert{
 		skipSanitization:  skipSanitization,
 		forceDeleteHeader: forceDeleteHeader,
@@ -31,20 +31,11 @@ func NewClientCert(skipSanitization, forceDeleteHeader func(req *http.Request) (
 }
 
 func (c *clientCert) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	skip, err := c.skipSanitization(r)
-	if err != nil {
-		c.logger.Error("signature-validation-failed", zap.Error(err))
-		writeStatus(
-			rw,
-			http.StatusBadRequest,
-			"Failed to validate Route Service Signature",
-			c.logger,
-		)
-		return
-	}
+	skip := c.skipSanitization(r)
 	if !skip {
 		switch c.forwardingMode {
 		case config.FORWARD:
+			// TODO: Consider putting these in readable booleans like "isTLS" and "hasPeerCertificates"
 			if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 				r.Header.Del(xfcc)
 			}
@@ -73,6 +64,8 @@ func (c *clientCert) ServeHTTP(rw http.ResponseWriter, r *http.Request, next htt
 	next(rw, r)
 }
 
+//TODO: rename this function
+// maybe setXFCCHeaderWithTlsCertificate ?
 func sanitizeHeader(r *http.Request) {
 	// we only care about the first cert at this moment
 	if len(r.TLS.PeerCertificates) > 0 {

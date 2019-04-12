@@ -79,6 +79,11 @@ type BackendConfig struct {
 	TLSPem                `yaml:",inline"` // embed to get cert_chain and private_key for client authentication
 }
 
+type RouteServiceConfig struct {
+	ClientAuthCertificate tls.Certificate
+	TLSPem                `yaml:",inline"` // embed to get cert_chain and private_key for client authentication
+}
+
 type LoggingConfig struct {
 	Syslog                 string `yaml:"syslog"`
 	SyslogAddr             string
@@ -186,12 +191,13 @@ type Config struct {
 	RouteServiceRecommendHttps bool             `yaml:"route_services_recommend_https,omitempty"`
 	RouteServicesHairpinning   bool             `yaml:"route_services_hairpinning"`
 	// These fields are populated by the `Process` function.
-	Ip                          string        `yaml:"-"`
-	RouteServiceEnabled         bool          `yaml:"-"`
-	NatsClientPingInterval      time.Duration `yaml:"nats_client_ping_interval,omitempty"`
-	NatsClientMessageBufferSize int           `yaml:"-"`
-	Backends                    BackendConfig `yaml:"backends,omitempty"`
-	ExtraHeadersToLog           []string      `yaml:"extra_headers_to_log,omitempty"`
+	Ip                          string             `yaml:"-"`
+	RouteServiceEnabled         bool               `yaml:"-"`
+	NatsClientPingInterval      time.Duration      `yaml:"nats_client_ping_interval,omitempty"`
+	NatsClientMessageBufferSize int                `yaml:"-"`
+	Backends                    BackendConfig      `yaml:"backends,omitempty"`
+	RouteServiceConfig          RouteServiceConfig `yaml:"route_services,omitempty"`
+	ExtraHeadersToLog           []string           `yaml:"extra_headers_to_log,omitempty"`
 
 	TokenFetcherMaxRetries                    uint32        `yaml:"token_fetcher_max_retries,omitempty"`
 	TokenFetcherRetryInterval                 time.Duration `yaml:"token_fetcher_retry_interval,omitempty"`
@@ -293,6 +299,15 @@ func (c *Config) Process() error {
 			return fmt.Errorf(errMsg)
 		}
 		c.Backends.ClientAuthCertificate = certificate
+	}
+
+	if c.RouteServiceConfig.CertChain != "" && c.RouteServiceConfig.PrivateKey != "" {
+		certificate, err := tls.X509KeyPair([]byte(c.RouteServiceConfig.CertChain), []byte(c.RouteServiceConfig.PrivateKey))
+		if err != nil {
+			errMsg := fmt.Sprintf("Error loading key pair: %s", err.Error())
+			return fmt.Errorf(errMsg)
+		}
+		c.RouteServiceConfig.ClientAuthCertificate = certificate
 	}
 
 	if c.EnableSSL {
