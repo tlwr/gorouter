@@ -207,6 +207,23 @@ func (s *testState) registerWithInternalRouteService(appBackend, routeServiceSer
 	s.registerAndWait(rm)
 }
 
+func (s *testState) registerWithCompleteUriList(appBackend *httptest.Server, uris []string) {
+	_, appBackendPort := hostnameAndPort(appBackend.Listener.Addr().String())
+	var rUris []route.Uri
+	for _, u := range uris {
+		rUris = append(rUris, route.Uri(u))
+	}
+	rm := mbus.RegistryMessage{
+		Host:                    "127.0.0.1",
+		Port:                    uint16(appBackendPort),
+		Uris:                    rUris,
+		CompleteUriList:         true,
+		StaleThresholdInSeconds: 10,
+	}
+	s.registerAndWait(rm)
+
+}
+
 func (s *testState) registerAndWait(rm mbus.RegistryMessage) {
 	b, _ := json.Marshal(rm)
 	s.mbusClient.Publish("router.register", b)
