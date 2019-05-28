@@ -67,7 +67,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 	})
 
-	Context("Register", func() {
+	Describe("Register", func() {
 		It("emits message_count metrics", func() {
 			r.Register("foo", fooEndpoint)
 			Expect(reporter.CaptureRegistryMessageCallCount()).To(Equal(1))
@@ -323,7 +323,7 @@ var _ = Describe("RouteRegistry", func() {
 			})
 		})
 
-		Context("Modification Tags", func() {
+		Describe("Modification Tags", func() {
 			var (
 				endpoint *route.Endpoint
 				modTag   models.ModificationTag
@@ -410,7 +410,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 	})
 
-	Context("Unregister", func() {
+	Describe("Unregister", func() {
 		Context("when endpoint has component tagged", func() {
 			BeforeEach(func() {
 				fooEndpoint.Tags = map[string]string{"component": "oauth-server"}
@@ -701,7 +701,7 @@ var _ = Describe("RouteRegistry", func() {
 		})
 	})
 
-	Context("Lookup", func() {
+	Describe("Lookup", func() {
 		It("case insensitive lookup", func() {
 			m := route.NewEndpoint(&route.EndpointOpts{Host: "192.168.1.1", Port: 1234})
 
