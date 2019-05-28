@@ -7,6 +7,14 @@ import (
 
 type Uri string
 
+func StringsToUris(asStrings []string) []Uri {
+	var rUris []Uri
+	for _, u := range asStrings {
+		rUris = append(rUris, Uri(u))
+	}
+	return rUris
+}
+
 func (u Uri) ToLower() Uri {
 	return Uri(strings.ToLower(u.String()))
 }
