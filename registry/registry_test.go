@@ -410,27 +410,92 @@ var _ = Describe("RouteRegistry", func() {
 		})
 	})
 
-	XDescribe("Replace", func() {
-		Context("when there are already two routes for an endpoint", func() {
+	FDescribe("Replace", func() {
+		Context("when there already is and endpoint with routes", func() {
+			var endpoint0 *route.Endpoint
+			var endpoint1 *route.Endpoint
+			BeforeEach(func() {
+				endpoint0 = route.NewEndpoint(&route.EndpointOpts{
+					Host: "some-host",
+					Port: 5432,
+				})
+				endpoint1 = route.NewEndpoint(&route.EndpointOpts{
+					Host: "some-host",
+					Port: 5431,
+				})
+				r.Register("one.app.com", endpoint0)
+			})
+
+			It("keeps the original endpoint's routes when Replacing routes for a new endpoint", func() {
+				r.Replace(route.StringsToUris([]string{}), endpoint1)
+
+				pool := r.Lookup("one.app.com")
+				Expect(pool).NotTo(BeNil())
+				iter := pool.Endpoints("", "")
+				Expect(iter.Next()).To(Equal(endpoint0))
+			})
+
+			It("removes endpoint when replacing with no URIs", func() {
+				r.Replace(route.StringsToUris([]string{}), endpoint0)
+
+				pool := r.Lookup("one.app.com")
+				Expect(pool).To(BeNil())
+			})
+		})
+
+		Context("when there is already one route for an endpoint", func() {
 			var endpoint *route.Endpoint
 			BeforeEach(func() {
 				endpoint = route.NewEndpoint(&route.EndpointOpts{
 					Host: "some-host",
 					Port: 5432,
 				})
-				r.Register("dora.app.com", endpoint)
-				r.Register("the-explora.app.com", endpoint)
+				r.Register("one.app.com", endpoint)
 			})
 
-			It("replaces old route with new ones", func() {
-				r.Replace(route.StringsToUris([]string{"the-explora.app.com"}), endpoint)
+			It("replaces old route with new one", func() {
+				r.Replace(route.StringsToUris([]string{"two.app.com"}), endpoint)
 
-				Expect(r.Lookup("dora.app.com")).To(BeNil())
+				Expect(r.Lookup("one.app.com")).To(BeNil())
 
-				pool := r.Lookup("the-explora.app.com")
+				pool := r.Lookup("two.app.com")
 				Expect(pool).NotTo(BeNil())
 				iter := pool.Endpoints("", "")
 				Expect(iter.Next()).To(Equal(endpoint))
+			})
+		})
+
+		Context("when there are no routes for an endpoint", func() {
+			var endpoint *route.Endpoint
+			BeforeEach(func() {
+				endpoint = route.NewEndpoint(&route.EndpointOpts{
+					Host: "some-host",
+					Port: 5432,
+				})
+			})
+
+			It("adds the single new route in the list of URIs", func() {
+				r.Replace(route.StringsToUris([]string{"one.app.com"}), endpoint)
+
+				pool := r.Lookup("one.app.com")
+				Expect(pool).NotTo(BeNil())
+				iter := pool.Endpoints("", "")
+				Expect(iter.Next()).To(Equal(endpoint))
+			})
+
+			It("adds multiple new routes in the list of URIs", func() {
+				var uris []string
+				for i := 0; i < 100; i++ {
+					uris = append(uris, fmt.Sprintf("%d.app.com", i))
+				}
+				r.Replace(route.StringsToUris(uris), endpoint)
+
+				for i := 0; i < 100; i++ {
+					pool := r.Lookup(route.Uri(fmt.Sprintf("%d.app.com", i)))
+					Expect(pool).NotTo(BeNil())
+					iter := pool.Endpoints("", "")
+					Expect(iter.Next()).To(Equal(endpoint))
+				}
 			})
 		})
 	})

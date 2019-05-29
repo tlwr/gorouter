@@ -57,10 +57,8 @@ var _ = XDescribe("route table being updated by NATS messages", func() {
 		})
 
 		Context("when getting new routes", func() {
-			BeforeEach(func() {
-				testState.registerWithCompleteUriList(testApp, []string{
-					"one.some.domain",
-				})
+			testState.registerWithCompleteUriList(testApp, []string{
+				"one.some.domain",
 			})
 
 			It("Can access the app via the new URI", func() {

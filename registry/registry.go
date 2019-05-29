@@ -36,13 +36,20 @@ const (
 	DISCONNECTED
 )
 
+type RouteTable interface {
+	find
+	insert
+	delete
+}
+
 type RouteRegistry struct {
 	sync.RWMutex
 
 	logger logger.Logger
 
 	// Access to the Trie datastructure should be governed by the RWMutex of RouteRegistry
-	byURI *container.Trie
+	byURI      *container.Trie
+	routeTable *RouteTable
 
 	// used for ability to suspend pruning
 	suspendPruning func() bool
@@ -81,6 +88,17 @@ func NewRouteRegistry(logger logger.Logger, c *config.Config, reporter metrics.R
 	return r
 }
 
+func (r *RouteRegistry) Replace(uris []route.Uri, endpoint *route.Endpoint) {
+	r.byURI = container.NewTrie()
+	for _, u := range uris {
+		r.Register(u, endpoint)
+	}
+}
+
+func (r *RouteRegistry) replace(uri []route.Uri, endpoint *route.Endpoint) route.PoolPutResult {
+	return -1
+}
+
 func (r *RouteRegistry) Register(uri route.Uri, endpoint *route.Endpoint) {
 	if !r.endpointInRouterShard(endpoint) {
 		return
@@ -99,9 +117,6 @@ func (r *RouteRegistry) Register(uri route.Uri, endpoint *route.Endpoint) {
 	} else {
 		r.logger.Debug("endpoint-not-registered", zapData(uri, endpoint)...)
 	}
-}
-
-func (r *RouteRegistry) Replace(uri []route.Uri, endpoint *route.Endpoint) {
 }
 
 func (r *RouteRegistry) register(uri route.Uri, endpoint *route.Endpoint) route.PoolPutResult {
