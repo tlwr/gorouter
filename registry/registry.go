@@ -18,6 +18,7 @@ import (
 //go:generate counterfeiter -o fakes/fake_registry.go . Registry
 type Registry interface {
 	Register(uri route.Uri, endpoint *route.Endpoint)
+	Replace(uri []route.Uri, endpoint *route.Endpoint)
 	Unregister(uri route.Uri, endpoint *route.Endpoint)
 	Lookup(uri route.Uri) *route.Pool
 	LookupWithInstance(uri route.Uri, appID, appIndex string) *route.Pool
@@ -98,6 +99,9 @@ func (r *RouteRegistry) Register(uri route.Uri, endpoint *route.Endpoint) {
 	} else {
 		r.logger.Debug("endpoint-not-registered", zapData(uri, endpoint)...)
 	}
+}
+
+func (r *RouteRegistry) Replace(uri []route.Uri, endpoint *route.Endpoint) {
 }
 
 func (r *RouteRegistry) register(uri route.Uri, endpoint *route.Endpoint) route.PoolPutResult {

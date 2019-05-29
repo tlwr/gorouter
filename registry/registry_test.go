@@ -410,6 +410,31 @@ var _ = Describe("RouteRegistry", func() {
 		})
 	})
 
+	XDescribe("Replace", func() {
+		Context("when there are already two routes for an endpoint", func() {
+			var endpoint *route.Endpoint
+			BeforeEach(func() {
+				endpoint = route.NewEndpoint(&route.EndpointOpts{
+					Host: "some-host",
+					Port: 5432,
+				})
+				r.Register("dora.app.com", endpoint)
+				r.Register("the-explora.app.com", endpoint)
+			})
+
+			It("replaces old route with new ones", func() {
+				r.Replace(route.StringsToUris([]string{"the-explora.app.com"}), endpoint)
+
+				Expect(r.Lookup("dora.app.com")).To(BeNil())
+
+				pool := r.Lookup("the-explora.app.com")
+				Expect(pool).NotTo(BeNil())
+				iter := pool.Endpoints("", "")
+				Expect(iter.Next()).To(Equal(endpoint))
+			})
+		})
+	})
+
 	Describe("Unregister", func() {
 		Context("when endpoint has component tagged", func() {
 			BeforeEach(func() {
