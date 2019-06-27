@@ -49,6 +49,8 @@ func (hh *httpStartStopHandler) ServeHTTP(rw http.ResponseWriter, r *http.Reques
 	startStopEvent := factories.NewHttpStartStop(r, prw.Status(), int64(prw.Size()), events.PeerType_Server, requestID)
 	startStopEvent.StartTimestamp = proto.Int64(startTime.UnixNano())
 
+	startStopEvent.XXX_unrecognized = []byte("{\"mewo\": \"meow\"}")
+
 	err = hh.emitter.Emit(startStopEvent)
 	if err != nil {
 		hh.logger.Info("failed-to-emit-startstop-event", zap.Error(err))
