@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"code.cloudfoundry.org/gorouter/registry"
+	"code.cloudfoundry.org/gorouter/route"
+	"fmt"
+	"github.com/cloudfoundry/dropsonde/emitter"
 	"net/http"
 	"time"
 
@@ -18,14 +22,16 @@ import (
 type httpStartStopHandler struct {
 	emitter dropsonde.EventEmitter
 	logger  logger.Logger
+	registry registry.Registry
 }
 
 // NewHTTPStartStop creates a new handler that handles emitting frontent
 // HTTP StartStop events
-func NewHTTPStartStop(emitter dropsonde.EventEmitter, logger logger.Logger) negroni.Handler {
+func NewHTTPStartStop(emitter dropsonde.EventEmitter, logger logger.Logger, registry registry.Registry) negroni.Handler {
 	return &httpStartStopHandler{
 		emitter: emitter,
 		logger:  logger,
+		registry: registry,
 	}
 }
 
@@ -49,9 +55,28 @@ func (hh *httpStartStopHandler) ServeHTTP(rw http.ResponseWriter, r *http.Reques
 	startStopEvent := factories.NewHttpStartStop(r, prw.Status(), int64(prw.Size()), events.PeerType_Server, requestID)
 	startStopEvent.StartTimestamp = proto.Int64(startTime.UnixNano())
 
-	startStopEvent.XXX_unrecognized = []byte("{\"mewo\": \"meow\"}")
+	// Wrap event in an envelope
+	envelope, err := emitter.Wrap(startStopEvent, hh.emitter.Origin())
+	if err != nil {
+		hh.logger.Info("failed-to-emit-startstop-event", zap.Error(err))
+	}
 
-	err = hh.emitter.Emit(startStopEvent)
+	// Look up route in registry
+	uri := route.Uri(hostWithoutPort(r.Host) + r.RequestURI)
+	hh.logger.Debug(fmt.Sprintf("Looking up URI: %s", uri.String()))
+	endpointPool := hh.registry.Lookup(uri)
+	if endpointPool != nil {
+		hh.logger.Debug("endpointPool not nil")
+		hh.logger.Debug(fmt.Sprintf("endpointPool.isEmpty(): %t", endpointPool.IsEmpty()))
+		endpointPool.Each(func(endpoint *route.Endpoint) {
+			if endpoint.PrivateInstanceId == startStopEvent.GetInstanceId() {
+				// Update envelope to include tags
+				envelope.Tags = endpoint.Tags
+			}
+		})
+	}
+
+	err = hh.emitter.EmitEnvelope(envelope)
 	if err != nil {
 		hh.logger.Info("failed-to-emit-startstop-event", zap.Error(err))
 	}

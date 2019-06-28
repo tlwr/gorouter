@@ -2,23 +2,23 @@ package handlers_test
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-
 	"code.cloudfoundry.org/gorouter/common/uuid"
 	"code.cloudfoundry.org/gorouter/handlers"
 	logger_fakes "code.cloudfoundry.org/gorouter/logger/fakes"
+	"code.cloudfoundry.org/gorouter/registry/fakes"
+	"code.cloudfoundry.org/gorouter/route"
 	"code.cloudfoundry.org/gorouter/test_util"
-
+	"encoding/binary"
+	"errors"
 	"github.com/cloudfoundry/dropsonde/emitter/fake"
 	"github.com/cloudfoundry/sonde-go/events"
 	gouuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/urfave/negroni"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 )
 
 var _ = Describe("HTTPStartStop Handler", func() {
@@ -32,6 +32,7 @@ var _ = Describe("HTTPStartStop Handler", func() {
 
 		fakeEmitter *fake.FakeEventEmitter
 		fakeLogger  *logger_fakes.FakeLogger
+		fakeRegistry *fakes.FakeRegistry
 
 		nextCalled bool
 	)
@@ -48,6 +49,18 @@ var _ = Describe("HTTPStartStop Handler", func() {
 
 		fakeEmitter = fake.NewFakeEventEmitter("fake")
 		fakeLogger = new(logger_fakes.FakeLogger)
+		fakeRegistry = &fakes.FakeRegistry{}
+
+
+		fakeRegistry.LookupStub = func(uri route.Uri) *route.EndpointPool {
+			routePool := route.NewPool(&route.PoolOpts{})
+			endpointWithTags := route.NewEndpoint(&route.EndpointOpts{
+				Tags: map[string]string{"component": "route-emitter"},
+			})
+			routePool.Put(endpointWithTags)
+
+			return routePool
+		}
 
 		nextHandler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			_, err := ioutil.ReadAll(req.Body)
@@ -64,25 +77,26 @@ var _ = Describe("HTTPStartStop Handler", func() {
 		handler = negroni.New()
 		handler.Use(handlers.NewRequestInfo())
 		handler.Use(handlers.NewProxyWriter(fakeLogger))
-		handler.Use(handlers.NewHTTPStartStop(fakeEmitter, fakeLogger))
+		handler.Use(handlers.NewHTTPStartStop(fakeEmitter, fakeLogger, fakeRegistry))
 		handler.UseHandlerFunc(nextHandler)
 	})
 
 	It("emits an HTTP StartStop event", func() {
 		handler.ServeHTTP(resp, req)
 		var startStopEvent *events.HttpStartStop
-		findStartStopEvent := func() *events.HttpStartStop {
-			for _, ev := range fakeEmitter.GetEvents() {
-				var ok bool
-				startStopEvent, ok = ev.(*events.HttpStartStop)
-				if ok {
-					return startStopEvent
+		var startStopEnvelope *events.Envelope
+		findStartStopEnvelope := func() *events.Envelope {
+			for _, ev := range fakeEmitter.GetEnvelopes() {
+				if ev.GetEventType() == events.Envelope_HttpStartStop {
+					startStopEnvelope = ev
+					return startStopEnvelope
 				}
 			}
 			return nil
 		}
 
-		Eventually(findStartStopEvent).ShouldNot(BeNil())
+		Eventually(findStartStopEnvelope).ShouldNot(BeNil())
+		startStopEvent = startStopEnvelope.GetHttpStartStop()
 		reqID := startStopEvent.GetRequestId()
 		var reqUUID gouuid.UUID
 		binary.LittleEndian.PutUint64(reqUUID[:8], reqID.GetLow())
@@ -91,6 +105,7 @@ var _ = Describe("HTTPStartStop Handler", func() {
 		Expect(startStopEvent.GetMethod().String()).To(Equal("GET"))
 		Expect(startStopEvent.GetStatusCode()).To(Equal(int32(http.StatusTeapot)))
 		Expect(startStopEvent.GetContentLength()).To(Equal(int64(37)))
+		Expect(startStopEnvelope.GetTags()).To(Equal(map[string]string{"component": "route-emitter"}))
 
 		Expect(nextCalled).To(BeTrue(), "Expected the next handler to be called.")
 	})
@@ -99,7 +114,7 @@ var _ = Describe("HTTPStartStop Handler", func() {
 		var badHandler *negroni.Negroni
 		BeforeEach(func() {
 			badHandler = negroni.New()
-			badHandler.Use(handlers.NewHTTPStartStop(fakeEmitter, fakeLogger))
+			badHandler.Use(handlers.NewHTTPStartStop(fakeEmitter, fakeLogger, fakeRegistry))
 		})
 		It("calls Fatal on the logger", func() {
 			badHandler.ServeHTTP(resp, req)

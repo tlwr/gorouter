@@ -139,7 +139,7 @@ func NewProxy(
 	n.Use(handlers.NewRequestInfo())
 	n.Use(handlers.NewProxyWriter(logger))
 	n.Use(handlers.NewVcapRequestIdHeader(logger))
-	n.Use(handlers.NewHTTPStartStop(dropsonde.DefaultEmitter, logger))
+	n.Use(handlers.NewHTTPStartStop(dropsonde.DefaultEmitter, logger, registry))
 	n.Use(handlers.NewAccessLog(accessLogger, zipkinHandler.HeadersToLog(), logger))
 	n.Use(handlers.NewReporter(reporter, logger))
 	if !reflect.DeepEqual(cfg.HTTPRewrite, config.HTTPRewrite{}) {
