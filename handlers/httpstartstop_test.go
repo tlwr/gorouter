@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/gorouter/common/uuid"
 	"code.cloudfoundry.org/gorouter/handlers"
 	logger_fakes "code.cloudfoundry.org/gorouter/logger/fakes"
+	"code.cloudfoundry.org/gorouter/route"
 	"code.cloudfoundry.org/gorouter/test_util"
 
 	"github.com/cloudfoundry/dropsonde/emitter/fake"
@@ -21,14 +22,32 @@ import (
 	"github.com/urfave/negroni"
 )
 
+func findEnvelope(fakeEmitter *fake.FakeEventEmitter, eventType events.Envelope_EventType) *events.Envelope {
+	for _, envelope := range fakeEmitter.GetEnvelopes() {
+		if *envelope.EventType == eventType {
+			return envelope
+		}
+	}
+	return nil
+}
+
+func convertUUID(uuid *events.UUID) gouuid.UUID {
+	var reqUUID gouuid.UUID
+	binary.LittleEndian.PutUint64(reqUUID[:8], uuid.GetLow())
+	binary.LittleEndian.PutUint64(reqUUID[8:], uuid.GetHigh())
+
+	return reqUUID
+}
+
 var _ = Describe("HTTPStartStop Handler", func() {
 	var (
 		vcapHeader  string
 		handler     *negroni.Negroni
 		nextHandler http.HandlerFunc
 
-		resp http.ResponseWriter
-		req  *http.Request
+		resp     http.ResponseWriter
+		req      *http.Request
+		endpoint *route.Endpoint
 
 		fakeEmitter *fake.FakeEventEmitter
 		fakeLogger  *logger_fakes.FakeLogger
@@ -49,6 +68,17 @@ var _ = Describe("HTTPStartStop Handler", func() {
 		fakeEmitter = fake.NewFakeEventEmitter("fake")
 		fakeLogger = new(logger_fakes.FakeLogger)
 
+		endpoint = route.NewEndpoint(&route.EndpointOpts{
+			Tags: map[string]string{
+				"component":           "some-component",
+				"instance_id":         "some-instance-id",
+				"process_id":          "some-proc-id",
+				"process_instance_id": "some-proc-instance-id",
+				"process_type":        "some-proc-type",
+				"source_id":           "some-source-id",
+			},
+		})
+
 		nextHandler = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			_, err := ioutil.ReadAll(req.Body)
 			Expect(err).NotTo(HaveOccurred())
@@ -61,6 +91,10 @@ var _ = Describe("HTTPStartStop Handler", func() {
 	})
 
 	JustBeforeEach(func() {
+		requestInfo, err := handlers.ContextRequestInfo(req)
+		Expect(err).ToNot(HaveOccurred())
+		requestInfo.RouteEndpoint = endpoint
+
 		handler = negroni.New()
 		handler.Use(handlers.NewRequestInfo())
 		handler.Use(handlers.NewProxyWriter(fakeLogger))
@@ -70,29 +104,34 @@ var _ = Describe("HTTPStartStop Handler", func() {
 
 	It("emits an HTTP StartStop event", func() {
 		handler.ServeHTTP(resp, req)
-		var startStopEvent *events.HttpStartStop
-		findStartStopEvent := func() *events.HttpStartStop {
-			for _, ev := range fakeEmitter.GetEvents() {
-				var ok bool
-				startStopEvent, ok = ev.(*events.HttpStartStop)
-				if ok {
-					return startStopEvent
-				}
-			}
-			return nil
-		}
 
-		Eventually(findStartStopEvent).ShouldNot(BeNil())
-		reqID := startStopEvent.GetRequestId()
-		var reqUUID gouuid.UUID
-		binary.LittleEndian.PutUint64(reqUUID[:8], reqID.GetLow())
-		binary.LittleEndian.PutUint64(reqUUID[8:], reqID.GetHigh())
+		envelope := findEnvelope(fakeEmitter, events.Envelope_HttpStartStop)
+		Expect(envelope).ToNot(BeNil())
+
+		startStopEvent := envelope.HttpStartStop
+		Expect(startStopEvent).ToNot(BeNil())
+
+		reqUUID := convertUUID(startStopEvent.GetRequestId())
 		Expect(reqUUID.String()).To(Equal(vcapHeader))
 		Expect(startStopEvent.GetMethod().String()).To(Equal("GET"))
 		Expect(startStopEvent.GetStatusCode()).To(Equal(int32(http.StatusTeapot)))
 		Expect(startStopEvent.GetContentLength()).To(Equal(int64(37)))
 
 		Expect(nextCalled).To(BeTrue(), "Expected the next handler to be called.")
+	})
+
+	It("emits an HTTP StartStop with tags", func() {
+		handler.ServeHTTP(resp, req)
+		envelope := findEnvelope(fakeEmitter, events.Envelope_HttpStartStop)
+		Expect(envelope).ToNot(BeNil())
+
+		Expect(envelope.Tags).NotTo(HaveLen(0))
+		Expect(envelope.Tags["component"]).To(Equal("some-component"))
+		Expect(envelope.Tags["instance_id"]).To(Equal("some-instance-id"))
+		Expect(envelope.Tags["process_id"]).To(Equal("some-instance-id"))
+		Expect(envelope.Tags["process_instance_id"]).To(Equal("some-proc-instance-id"))
+		Expect(envelope.Tags["process_type"]).To(Equal("some-proc-type"))
+		Expect(envelope.Tags["source_id"]).To(Equal("some-source-id"))
 	})
 
 	Context("when the response writer is not a proxy response writer", func() {
