@@ -36,6 +36,7 @@ func (f *Forwarder) ForwardIO(clientConn, backendConn io.ReadWriter) int {
 	headerWasRead := make(chan struct{})
 	headerBytes := &bytes.Buffer{}
 	teedReader := io.TeeReader(backendConn, headerBytes)
+	respReader := bufio.NewReader(teedReader)
 	var resp *http.Response
 	var err error
 
@@ -43,7 +44,7 @@ func (f *Forwarder) ForwardIO(clientConn, backendConn io.ReadWriter) int {
 	defer cancel()
 
 	go func() {
-		resp, err = http.ReadResponse(bufio.NewReader(teedReader), nil)
+		resp, err = http.ReadResponse(respReader, nil)
 
 		select {
 		case headerWasRead <- struct{}{}:
