@@ -132,6 +132,10 @@ func NewRouter(logger logger.Logger, cfg *config.Config, handler http.Handler, m
 	return router, nil
 }
 
+//func (r *Router) Health() health.Status {
+//	return r.health.Health()
+//}
+
 func (r *Router) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	r.registry.StartPruningCycle()
 
@@ -181,6 +185,7 @@ func (r *Router) OnErrOrSignal(signals <-chan os.Signal, errChan chan error) {
 		if err != nil {
 			r.logger.Error("Error occurred", zap.Error(err))
 			r.health.SetHealth(health.Degraded)
+			fmt.Printf("WE REACHED AN ERROR %p %s\n", r.health, r.health)
 		}
 	case sig := <-signals:
 		go func() {

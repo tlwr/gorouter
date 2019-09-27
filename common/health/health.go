@@ -1,6 +1,7 @@
 package health
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -37,6 +38,7 @@ func (h *Health) SetHealth(s Status) {
 
 	h.health = s
 	h.mu.Unlock()
+	fmt.Printf("SETTING TO %s %p \n", h.String(), &h.health)
 
 	if h.OnDegrade != nil && s == Degraded {
 		h.OnDegrade()
