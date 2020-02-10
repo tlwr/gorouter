@@ -154,9 +154,9 @@ var _ = Describe("Lookup", func() {
 				Expect(resp.Header().Get("Cache-Control")).To(Equal("no-cache, no-store"))
 			})
 
-			It("returns a 400 BadRequest and does not call next", func() {
+			It("returns a 412 StatusPreconditionFailed and does not call next", func() {
 				Expect(nextCalled).To(BeFalse())
-				Expect(resp.Code).To(Equal(http.StatusBadRequest))
+				Expect(resp.Code).To(Equal(http.StatusPreconditionFailed))
 			})
 
 			It("has a meaningful response", func() {

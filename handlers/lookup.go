@@ -139,7 +139,7 @@ func (l *lookupHandler) handleMissingRoute(rw http.ResponseWriter, r *http.Reque
 	if appInstanceHeader := r.Header.Get(router_http.CfAppInstance); appInstanceHeader != "" {
 		guid, idx := splitInstanceHeader(appInstanceHeader)
 		errorMsg = fmt.Sprintf("Requested instance ('%s') with guid ('%s') does not exist for route ('%s')", idx, guid, r.Host)
-		returnStatus = http.StatusBadRequest
+		returnStatus = http.StatusPreconditionFailed
 	}
 
 	writeStatus(
